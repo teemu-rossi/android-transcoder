@@ -29,17 +29,20 @@ class MediaFormatValidator {
     // Refer: http://en.wikipedia.org/wiki/H.264/MPEG-4_AVC#Profiles
     private static final int PROFILE_IDC_BASELINE = 66;
 
-    public static void validateVideoOutputFormat(MediaFormat format) {
+    public static void validateVideoOutputFormat(MediaFormat format, boolean avcBaselineValidation) {
         String mime = format.getString(MediaFormat.KEY_MIME);
         // Refer: http://developer.android.com/guide/appendix/media-formats.html#core
         // Refer: http://en.wikipedia.org/wiki/MPEG-4_Part_14#Data_streams
         if (!MediaFormatExtraConstants.MIMETYPE_VIDEO_AVC.equals(mime)) {
             throw new InvalidOutputFormatException("Video codecs other than AVC is not supported, actual mime type: " + mime);
         }
-        ByteBuffer spsBuffer = AvcCsdUtils.getSpsBuffer(format);
-        SeqParameterSet sps = H264Utils.readSPS(spsBuffer);
-        if (sps.profile_idc != PROFILE_IDC_BASELINE) {
-            throw new InvalidOutputFormatException("Non-baseline AVC video profile is not supported by Android OS, actual profile_idc: " + sps.profile_idc);
+
+        if (avcBaselineValidation) {
+            ByteBuffer spsBuffer = AvcCsdUtils.getSpsBuffer(format);
+            SeqParameterSet sps = H264Utils.readSPS(spsBuffer);
+            if (sps.profile_idc != PROFILE_IDC_BASELINE) {
+                throw new InvalidOutputFormatException("Non-baseline AVC video profile is not supported by Android OS, actual profile_idc: " + sps.profile_idc);
+            }
         }
     }
 

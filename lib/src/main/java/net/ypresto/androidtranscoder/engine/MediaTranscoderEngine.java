@@ -44,6 +44,8 @@ public class MediaTranscoderEngine {
     private volatile double mProgress;
     private ProgressCallback mProgressCallback;
     private long mDurationUs;
+    private long mMaximumDurationUs;
+    private boolean mAvcOutputBaselineValidationEnabled = true;
 
     /**
      * Do not use this constructor unless you know what you are doing.
@@ -61,6 +63,14 @@ public class MediaTranscoderEngine {
 
     public void setProgressCallback(ProgressCallback progressCallback) {
         mProgressCallback = progressCallback;
+    }
+
+    public void setMaximumDurationUs(long maximumDurationUs) {
+        mMaximumDurationUs = maximumDurationUs;
+    }
+
+    public void setAvcOutputBaselineProfileValidationEnabled(boolean enabled) {
+        mAvcOutputBaselineValidationEnabled = enabled;
     }
 
     /**
@@ -159,7 +169,7 @@ public class MediaTranscoderEngine {
         QueuedMuxer queuedMuxer = new QueuedMuxer(mMuxer, new QueuedMuxer.Listener() {
             @Override
             public void onDetermineOutputFormat() {
-                MediaFormatValidator.validateVideoOutputFormat(mVideoTrackTranscoder.getDeterminedFormat());
+                MediaFormatValidator.validateVideoOutputFormat(mVideoTrackTranscoder.getDeterminedFormat(), mAvcOutputBaselineValidationEnabled);
                 MediaFormatValidator.validateAudioOutputFormat(mAudioTrackTranscoder.getDeterminedFormat());
             }
         });
@@ -186,14 +196,29 @@ public class MediaTranscoderEngine {
             double progress = PROGRESS_UNKNOWN;
             mProgress = progress;
             if (mProgressCallback != null) mProgressCallback.onProgress(progress); // unknown
+        } else {
+            if (mMaximumDurationUs > 0 && mDurationUs > mMaximumDurationUs) {
+                Log.d(TAG, "Limiting duration to " + mMaximumDurationUs + " us (was " + mDurationUs + " us)");
+                mDurationUs = mMaximumDurationUs;
+            }
         }
         while (!(mVideoTrackTranscoder.isFinished() && mAudioTrackTranscoder.isFinished())) {
             boolean stepped = mVideoTrackTranscoder.stepPipeline()
                     || mAudioTrackTranscoder.stepPipeline();
             loopCount++;
+
+            long videoTimeUs = mVideoTrackTranscoder.getWrittenPresentationTimeUs();
+            long audioTimeUs = mAudioTrackTranscoder.getWrittenPresentationTimeUs();
+            Log.d(TAG, "videoTimeUs now " + videoTimeUs);
+
+            if (mMaximumDurationUs > 0 && (videoTimeUs > mMaximumDurationUs || audioTimeUs > mMaximumDurationUs)) {
+                // Reached limit
+                break;
+            }
+
             if (mDurationUs > 0 && loopCount % PROGRESS_INTERVAL_STEPS == 0) {
-                double videoProgress = mVideoTrackTranscoder.isFinished() ? 1.0 : Math.min(1.0, (double) mVideoTrackTranscoder.getWrittenPresentationTimeUs() / mDurationUs);
-                double audioProgress = mAudioTrackTranscoder.isFinished() ? 1.0 : Math.min(1.0, (double) mAudioTrackTranscoder.getWrittenPresentationTimeUs() / mDurationUs);
+                double videoProgress = mVideoTrackTranscoder.isFinished() ? 1.0 : Math.min(1.0, (double) videoTimeUs / mDurationUs);
+                double audioProgress = mAudioTrackTranscoder.isFinished() ? 1.0 : Math.min(1.0, (double) audioTimeUs / mDurationUs);
                 double progress = (videoProgress + audioProgress) / 2.0;
                 mProgress = progress;
                 if (mProgressCallback != null) mProgressCallback.onProgress(progress);

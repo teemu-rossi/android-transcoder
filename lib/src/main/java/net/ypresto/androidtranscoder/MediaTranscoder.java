@@ -41,6 +41,14 @@ public class MediaTranscoder {
     private static volatile MediaTranscoder sMediaTranscoder;
     private ThreadPoolExecutor mExecutor;
 
+    public static class TranscodingOptions {
+        /**
+         * Maximum duration in microseconds.
+         */
+        public long maxDurationUs;
+        public boolean disableAvcOutputBaselineProfileValidation;
+    }
+
     private MediaTranscoder() {
         mExecutor = new ThreadPoolExecutor(
                 0, MAXIMUM_THREAD, 60, TimeUnit.SECONDS,
@@ -159,6 +167,20 @@ public class MediaTranscoder {
      * @param listener          Listener instance for callback.
      */
     public Future<Void> transcodeVideo(final FileDescriptor inFileDescriptor, final String outPath, final MediaFormatStrategy outFormatStrategy, final Listener listener) {
+        return transcodeVideo(inFileDescriptor, outPath, outFormatStrategy, listener, null);
+        }
+
+        /**
+         * Transcodes video file asynchronously.
+         * Audio track will be kept unchanged.
+         *
+         * @param inFileDescriptor  FileDescriptor for input.
+         * @param outPath           File path for output.
+         * @param outFormatStrategy Strategy for output video format.
+         * @param listener          Listener instance for callback.
+         * @param options           Options for transcoding (or null if none)
+         */
+    public Future<Void> transcodeVideo(final FileDescriptor inFileDescriptor, final String outPath, final MediaFormatStrategy outFormatStrategy, final Listener listener, final TranscodingOptions options) {
         Looper looper = Looper.myLooper();
         if (looper == null) looper = Looper.getMainLooper();
         final Handler handler = new Handler(looper);
@@ -180,6 +202,16 @@ public class MediaTranscoder {
                             });
                         }
                     });
+                    if (options != null) {
+                        if (options.maxDurationUs > 0) {
+                            Log.d(TAG, "Limiting duration to " + options.maxDurationUs + " us");
+                            engine.setMaximumDurationUs(options.maxDurationUs);
+                        }
+                        if (options.disableAvcOutputBaselineProfileValidation) {
+                            Log.d(TAG, "Disabling AVC output baseline profile validation");
+                            engine.setAvcOutputBaselineProfileValidationEnabled(false);
+                        }
+                    }
                     engine.setDataSource(inFileDescriptor);
                     engine.transcodeVideo(outPath, outFormatStrategy);
                 } catch (IOException e) {

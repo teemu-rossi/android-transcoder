@@ -209,7 +209,6 @@ public class MediaTranscoderEngine {
 
             long videoTimeUs = mVideoTrackTranscoder.getWrittenPresentationTimeUs();
             long audioTimeUs = mAudioTrackTranscoder.getWrittenPresentationTimeUs();
-            Log.d(TAG, "videoTimeUs now " + videoTimeUs);
 
             if (mMaximumDurationUs > 0 && (videoTimeUs > mMaximumDurationUs || audioTimeUs > mMaximumDurationUs)) {
                 // Reached limit

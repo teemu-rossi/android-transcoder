@@ -47,6 +47,11 @@ public class MediaTranscoder {
          */
         public long maxDurationUs;
         public boolean disableAvcOutputBaselineProfileValidation;
+
+        /**
+         * Bail out if input video has an estimated frame rate higher than this (0 for no limit)
+         */
+        public int maximumFrameRate;
     }
 
     private MediaTranscoder() {
@@ -211,6 +216,9 @@ public class MediaTranscoder {
                             Log.d(TAG, "Disabling AVC output baseline profile validation");
                             engine.setAvcOutputBaselineProfileValidationEnabled(false);
                         }
+
+                        Log.d(TAG, "Maximum frame rate: " + options.maximumFrameRate);
+                        engine.setMaximumFrameRate(options.maximumFrameRate);
                     }
                     engine.setDataSource(inFileDescriptor);
                     engine.transcodeVideo(outPath, outFormatStrategy);

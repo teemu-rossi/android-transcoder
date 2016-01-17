@@ -26,6 +26,7 @@ import net.ypresto.androidtranscoder.utils.MediaExtractorUtils;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.util.IllegalFormatException;
 
 /**
  * Internal engine, do not use this directly.
@@ -36,6 +37,8 @@ public class MediaTranscoderEngine {
     private static final double PROGRESS_UNKNOWN = -1.0;
     private static final long SLEEP_TO_WAIT_TRACK_TRANSCODERS = 10;
     private static final long PROGRESS_INTERVAL_STEPS = 10;
+    // check average framerate for the first second
+    private static final long FRAMERATE_CHECK_AT_PRESENTATION_TIME_US = 1000000;
     private FileDescriptor mInputFileDescriptor;
     private TrackTranscoder mVideoTrackTranscoder;
     private TrackTranscoder mAudioTrackTranscoder;
@@ -45,6 +48,7 @@ public class MediaTranscoderEngine {
     private ProgressCallback mProgressCallback;
     private long mDurationUs;
     private long mMaximumDurationUs;
+    private int mMaximumFrameRate;
     private boolean mAvcOutputBaselineValidationEnabled = true;
 
     /**
@@ -71,6 +75,10 @@ public class MediaTranscoderEngine {
 
     public void setAvcOutputBaselineProfileValidationEnabled(boolean enabled) {
         mAvcOutputBaselineValidationEnabled = enabled;
+    }
+
+    public void setMaximumFrameRate(int maximumFrameRate) {
+        mMaximumFrameRate = maximumFrameRate;
     }
 
     /**
@@ -191,6 +199,8 @@ public class MediaTranscoderEngine {
     }
 
     private void runPipelines() {
+        long firstPresentationTimestamp = -1;
+        boolean framerateCheckDone = false;
         long loopCount = 0;
         if (mDurationUs <= 0) {
             double progress = PROGRESS_UNKNOWN;
@@ -209,6 +219,24 @@ public class MediaTranscoderEngine {
 
             long videoTimeUs = mVideoTrackTranscoder.getWrittenPresentationTimeUs();
             long audioTimeUs = mAudioTrackTranscoder.getWrittenPresentationTimeUs();
+            if (firstPresentationTimestamp == -1) {
+                firstPresentationTimestamp = videoTimeUs;
+            } else if (!framerateCheckDone &&
+                    mMaximumFrameRate > 0 &&
+                    videoTimeUs > firstPresentationTimestamp + FRAMERATE_CHECK_AT_PRESENTATION_TIME_US) {
+                Log.d(TAG, "Estimating frame rate");
+                framerateCheckDone = true;
+                int frameCount = mVideoTrackTranscoder.getSampleCount();
+                long timedelta = videoTimeUs - firstPresentationTimestamp;
+                Log.d(TAG, "frameCount=" + frameCount + " timedelta=" + timedelta);
+                if (timedelta > 0) {
+                    float framerate = frameCount * 1000000.0f / timedelta;
+                    if (framerate > mMaximumFrameRate) {
+                        throw new IllegalArgumentException(
+                                String.format("Estimated frame rate %.1f exceeds the set limit of %d fps", framerate, mMaximumFrameRate));
+                    }
+                }
+            }
 
             if (mMaximumDurationUs > 0 && (videoTimeUs > mMaximumDurationUs || audioTimeUs > mMaximumDurationUs)) {
                 // Reached limit

@@ -49,6 +49,7 @@ public class VideoTrackTranscoder implements TrackTranscoder {
     private boolean mDecoderStarted;
     private boolean mEncoderStarted;
     private long mWrittenPresentationTimeUs;
+    private int mSampleCount;
 
     public VideoTrackTranscoder(MediaExtractor extractor, int trackIndex,
                                 MediaFormat outputFormat, QueuedMuxer muxer) {
@@ -214,6 +215,10 @@ public class VideoTrackTranscoder implements TrackTranscoder {
             throw new RuntimeException("Could not determine actual output format.");
         }
 
+        if (result > 0) {
+            mSampleCount++;
+        }
+
         if ((mBufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
             mIsEncoderEOS = true;
             mBufferInfo.set(0, 0, 0, mBufferInfo.flags);
@@ -227,5 +232,10 @@ public class VideoTrackTranscoder implements TrackTranscoder {
         mWrittenPresentationTimeUs = mBufferInfo.presentationTimeUs;
         mEncoder.releaseOutputBuffer(result, false);
         return DRAIN_STATE_CONSUMED;
+    }
+
+    @Override
+    public int getSampleCount() {
+        return mSampleCount;
     }
 }

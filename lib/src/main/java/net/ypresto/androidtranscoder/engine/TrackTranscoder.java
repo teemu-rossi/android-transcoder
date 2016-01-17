@@ -47,4 +47,6 @@ public interface TrackTranscoder {
     boolean isFinished();
 
     void release();
+
+    int getSampleCount();
 }
